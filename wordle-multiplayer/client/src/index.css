@@ -1,0 +1,18 @@
+/* Additional or component-specific styles */
+.App {
+    text-align: center;
+  }
+  
+  input[type="text"], input[type="number"] {
+    width: 200px;
+  }
+  
+  button {
+    font-size: 18px;
+    margin-top: 10px;
+  }
+  
+  h3 {
+    margin-top: 20px;
+  }
+  
