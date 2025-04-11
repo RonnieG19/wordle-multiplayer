@@ -6,9 +6,11 @@ function App() {
   const [name, setName] = useState('');
   const [isGameStarted, setIsGameStarted] = useState(false);
   const [gameWord, setGameWord] = useState('');
-  const [guesses, setGuesses] = useState(0);
+  const [guesses, setGuesses] = useState([]);
+  const [currentGuess, setCurrentGuess] = useState('');
   const [time, setTime] = useState(0);
   const [rounds, setRounds] = useState(1);
+  const [gameOver, setGameOver] = useState(false);
 
   useEffect(() => {
     socket.on('playersUpdate', (players) => {
@@ -18,9 +20,12 @@ function App() {
     socket.on('gameStarted', ({ secretWord }) => {
       setGameWord(secretWord);
       setIsGameStarted(true);
+      setGuesses([]);
     });
 
     socket.on('gameOver', () => {
+      console.log("Game Over Triggered!!!!!")
+      setGameOver(true);
       alert('Game Over!');
     });
 
@@ -39,18 +44,27 @@ function App() {
     socket.emit('startGame');
   };
 
-  const handleSubmitGuess = (guess) => {
-    setGuesses(guesses + 1);
-    const currentTime = Date.now() - startTime;
-    socket.emit('playerResult', { guesses: guesses + 1, time: currentTime });
+  const handleSubmitGuess = () => {
+    if (currentGuess.length !== 5) return;
+    setGuesses([...guesses, currentGuess]);
+    const currentTime = Date.now() - time;
+    socket.emit('playerResult', { guesses: guesses.length + 1, time: currentTime });
+    setCurrentGuess('');
   };
 
-  const handleSetRounds = (rounds) => {
+  const handleSetRounds = () => {
     socket.emit('setRounds', rounds);
   };
 
+  const getGuessColor = (guess, index) => {
+    if (!gameWord) return '';
+    if (guess[index] === gameWord[index]) return 'green'; // Correct letter and position
+    if (gameWord.includes(guess[index])) return 'yellow'; // Correct letter, wrong position
+    return 'gray'; // Incorrect letter
+  };
+
   return (
-    <div>
+    <div className="game-container">
       <h1>Wordle Multiplayer</h1>
       {!name ? (
         <div>
@@ -80,11 +94,24 @@ function App() {
         </ul>
       </div>
 
-      {isGameStarted && (
+      {isGameStarted && !gameOver && (
         <div>
-          <h3>Guess the Word</h3>
-          <p>{gameWord}</p>
-          <button onClick={() => handleSubmitGuess('your_guess')}>Submit Guess</button>
+          <h3>Guess the Word:</h3>
+          <div className="grid">
+            {Array(5)
+              .fill('')
+              .map((_, index) => (
+                <input
+                  key={index}
+                  type="text"
+                  value={currentGuess[index] || ''}
+                  maxLength={1}
+                  onChange={(e) => setCurrentGuess(currentGuess.slice(0, index) + e.target.value + currentGuess.slice(index + 1))}
+                  disabled={gameOver}
+                />
+              ))}
+          </div>
+          <button onClick={handleSubmitGuess}>Submit Guess</button>
         </div>
       )}
 
@@ -95,7 +122,22 @@ function App() {
           value={rounds}
           onChange={(e) => setRounds(Number(e.target.value))}
         />
-        <button onClick={() => handleSetRounds(rounds)}>Set Rounds</button>
+        <button onClick={handleSetRounds}>Set Rounds</button>
+      </div>
+
+      <div>
+        <h3>Past Guesses:</h3>
+        <div className="past-guesses">
+          {guesses.map((guess, index) => (
+            <div key={index} className="guess">
+              {guess.split('').map((letter, i) => (
+                <span key={i} className={`tile ${getGuessColor(guess, i)}`}>
+                  {letter}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
