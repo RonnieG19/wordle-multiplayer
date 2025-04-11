@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import socket from './socket';
 
 function App() {
@@ -12,6 +12,8 @@ function App() {
   const [rounds, setRounds] = useState(1);
   const [gameOver, setGameOver] = useState(false);
 
+  const inputRefs = useRef([]);
+
   useEffect(() => {
     socket.on('playersUpdate', (players) => {
       setPlayers(players);
@@ -21,10 +23,11 @@ function App() {
       setGameWord(secretWord);
       setIsGameStarted(true);
       setGuesses([]);
+      setGameOver(false);
+      setCurrentGuess('');
     });
 
     socket.on('gameOver', () => {
-      console.log("Game Over Triggered!!!!!")
       setGameOver(true);
       alert('Game Over!');
     });
@@ -36,46 +39,80 @@ function App() {
     };
   }, []);
 
-  const handleJoin = () => {
-    socket.emit('joinGame', name);
+  const handleJoin = (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    socket.emit('joinGame', name.trim());
   };
 
   const handleStartGame = () => {
     socket.emit('startGame');
+    setTime(Date.now());
   };
 
   const handleSubmitGuess = () => {
-    if (currentGuess.length !== 5) return;
-    setGuesses([...guesses, currentGuess]);
+    if (currentGuess.length !== 5 || gameOver) return;
+    if (guesses.length >= 6) return;
+
+    const newGuesses = [...guesses, currentGuess];
+    setGuesses(newGuesses);
+
     const currentTime = Date.now() - time;
-    socket.emit('playerResult', { guesses: guesses.length + 1, time: currentTime });
+    socket.emit('playerResult', { guesses: newGuesses.length, time: currentTime });
+
     setCurrentGuess('');
+
+    if (newGuesses.length >= 6) {
+      setGameOver(true);
+    }
   };
 
   const handleSetRounds = () => {
     socket.emit('setRounds', rounds);
   };
 
+  const handleLetterChange = (e, idx) => {
+    const val = e.target.value.toUpperCase();
+    if (!/^[A-Z]?$/.test(val)) return;
+
+    const guessArray = currentGuess.split('');
+    guessArray[idx] = val;
+    const newGuess = guessArray.join('');
+    setCurrentGuess(newGuess);
+
+    if (val && idx < 4) {
+      inputRefs.current[idx + 1]?.focus();
+    }
+  };
+
+  const handleLetterKeyDown = (e, idx) => {
+    if (e.key === 'Backspace' && !e.target.value && idx > 0) {
+      inputRefs.current[idx - 1]?.focus();
+    }
+  };
+
   const getGuessColor = (guess, index) => {
     if (!gameWord) return '';
-    if (guess[index] === gameWord[index]) return 'green'; // Correct letter and position
-    if (gameWord.includes(guess[index])) return 'yellow'; // Correct letter, wrong position
-    return 'gray'; // Incorrect letter
+    if (guess[index] === gameWord[index]) return 'green';
+    if (gameWord.includes(guess[index])) return 'yellow';
+    return 'gray';
   };
 
   return (
     <div className="game-container">
       <h1>Wordle Multiplayer</h1>
+
       {!name ? (
-        <div>
+        <form onSubmit={handleJoin}>
           <input
             type="text"
             placeholder="Enter your name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            maxLength={20}
           />
-          <button onClick={handleJoin}>Join Game</button>
-        </div>
+          <button type="submit">Join Game</button>
+        </form>
       ) : (
         <div>
           <h2>Welcome, {name}!</h2>
@@ -104,10 +141,13 @@ function App() {
                 <input
                   key={index}
                   type="text"
-                  value={currentGuess[index] || ''}
                   maxLength={1}
-                  onChange={(e) => setCurrentGuess(currentGuess.slice(0, index) + e.target.value + currentGuess.slice(index + 1))}
+                  ref={(el) => (inputRefs.current[index] = el)}
+                  value={currentGuess[index] || ''}
+                  onChange={(e) => handleLetterChange(e, index)}
+                  onKeyDown={(e) => handleLetterKeyDown(e, index)}
                   disabled={gameOver}
+                  className="letter-input"
                 />
               ))}
           </div>
